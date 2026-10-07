@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-black select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Gym Set Stopwatch</title>
+    
+    <!-- PWA & Mobile Web App Capabilities -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Gym Timer">
+    <meta name="theme-color" content="#000000">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom styling & touch manipulation rules -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+
+        .font-mono-digits {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Custom scrollbar for history panel */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 4px;
+        }
+
+        /* Active touch press state animations */
+        .btn-active:active {
+            transform: scale(0.97);
+            filter: brightness(1.2);
+        }
+
+        /* Subtle ambient glow for giant timer */
+        .glow-emerald {
+            text-shadow: 0 0 35px rgba(16, 185, 129, 0.25);
+        }
+        .glow-amber {
+            text-shadow: 0 0 35px rgba(245, 158, 11, 0.25);
+        }
+
+        /* Safe area padding for iPhones with dynamic island or notch */
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom, 1rem);
+        }
+        .pt-safe {
+            padding-top: env(safe-area-inset-top, 1rem);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between overflow-hidden text-zinc-100 antialiased">
+
+    <!-- Top Bar: Total Time Badge & System Status -->
+    <header class="pt-safe px-5 pt-4 pb-2 flex items-center justify-between border-b border-zinc-900 bg-black/80 backdrop-blur-md z-10">
+        <!-- Muted Total Elapsed Time (Inverted Hierarchy: secondary info) -->
+        <div class="flex items-center gap-2 bg-zinc-900/80 px-3 py-1.5 rounded-full border border-zinc-800/80">
+            <span class="text-xs uppercase font-bold tracking-wider text-zinc-500">Total</span>
+            <span id="totalTimer" class="font-mono-digits text-sm font-semibold text-zinc-300">00:00.0</span>
+        </div>
+
+        <!-- System Badges: Wake Lock & Audio Toggle -->
+        <div class="flex items-center gap-3">
+            <!-- Screen Wake Lock Indicator -->
+            <div id="wakeLockBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-900 text-zinc-500 border border-zinc-800 transition-colors duration-300">
+                <span id="wakeLockDot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+                <span id="wakeLockText">Lock Off</span>
+            </div>
+
+            <!-- Sound Toggle Button -->
+            <button id="soundToggleBtn" class="p-2 text-zinc-400 hover:text-white bg-zinc-900 rounded-full border border-zinc-800 active:scale-95 transition-transform" aria-label="Toggle Sound">
+                <svg id="soundOnIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                <svg id="soundOffIcon" class="w-4 h-4 hidden text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero Section: Giant Lap Time Display -->
+    <main class="flex-1 flex flex-col justify-center items-center px-4 py-2 relative">
+        <div class="text-center w-full max-w-md">
+            <!-- Current Lap Counter Label -->
+            <div class="inline-flex items-center gap-2 mb-2 px-3 py-1 rounded-full bg-emerald-950/40 border border-emerald-800/40 text-emerald-400 font-bold text-xs tracking-wider uppercase">
+                <span id="lapCounterLabel">Set 1</span>
+                <span class="w-1 h-1 rounded-full bg-emerald-400"></span>
+                <span>Rest Time</span>
+            </div>
+
+            <!-- MAIN HERO DISPLAY: Current Lap / Rest Time (Huge font) -->
+            <div id="lapTimerDisplay" class="font-mono-digits text-7xl sm:text-8xl font-black tracking-tight text-emerald-400 glow-emerald my-1 transition-all duration-300">
+                00:00.0
+            </div>
+
+            <p class="text-xs text-zinc-500 font-medium tracking-wide uppercase mt-1">Current Set / Lap</p>
+        </div>
+    </main>
+
+    <!-- Action Controls Area (Contextual State Machine UI) -->
+    <section class="px-5 pb-4 w-full max-w-lg mx-auto flex flex-col gap-3">
+        
+        <!-- STATE 1: INITIAL / STOPPED -->
+        <div id="stateStopped" class="w-full">
+            <button id="startBtn" class="btn-active w-full h-24 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-2xl tracking-wide rounded-3xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-3 transition-all">
+                <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                START WORKOUT
+            </button>
+        </div>
+
+        <!-- STATE 2: RUNNING (Giant LAP button + Safe PAUSE button. NO RESET ALLOWED!) -->
+        <div id="stateRunning" class="hidden flex-col gap-3 w-full">
+            <!-- Giant Primary LAP Button (Occupies ~75% visual touch real estate) -->
+            <button id="lapBtn" class="btn-active w-full h-32 bg-emerald-500 active:bg-emerald-400 text-black font-black text-3xl tracking-wider rounded-3xl shadow-xl shadow-emerald-950/60 flex flex-col items-center justify-center border-4 border-emerald-300/30 transition-all">
+                <div class="flex items-center gap-3">
+                    <svg class="w-9 h-9 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" opacity="0"/></svg>
+                    <span>NEXT SET (LAP)</span>
+                </div>
+                <span class="text-xs font-bold text-emerald-950/80 uppercase tracking-widest mt-1">Tap to trigger lap rest</span>
+            </button>
+
+            <!-- Secondary Compact Pause Button -->
+            <button id="pauseBtn" class="btn-active w-full h-14 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-lg rounded-2xl border border-zinc-800 flex items-center justify-center gap-2 transition-all">
+                <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                Pause Workout
+            </button>
+        </div>
+
+        <!-- STATE 3: PAUSED (RESUME button + SAFE RED RESET button) -->
+        <div id="statePaused" class="hidden grid-cols-2 gap-3 w-full">
+            <!-- Safe Reset Button (Only available when paused) -->
+            <button id="resetBtn" class="btn-active h-20 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-800/60 font-extrabold text-lg rounded-2xl flex items-center justify-center gap-2 transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                RESET
+            </button>
+
+            <!-- Resume Button -->
+            <button id="resumeBtn" class="btn-active h-20 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xl rounded-2xl shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 transition-all">
+                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                RESUME
+            </button>
+        </div>
+
+    </section>
+
+    <!-- Scrollable Lap History List -->
+    <footer class="pb-safe px-5 pt-2 mb-2 w-full max-w-lg mx-auto">
+        <div class="bg-zinc-950 rounded-2xl border border-zinc-900 p-3 h-44 flex flex-col">
+            <!-- History Header -->
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-zinc-900 px-1">
+                <span class="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Set History
+                </span>
+                <span id="lapCountBadge" class="text-xs font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-full border border-zinc-800">0 Sets</span>
+            </div>
+
+            <!-- Scrollable Items Container -->
+            <div id="historyList" class="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                <!-- Empty State Message -->
+                <div id="emptyHistoryMsg" class="h-full flex items-center justify-center text-zinc-600 font-medium italic">
+                    Tap Start to begin recording set lap times
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Timer Engine Variables
+        let state = 'stopped'; // 'stopped' | 'running' | 'paused'
+        let startTime = 0;
+        let totalPausedTime = 0;
+        let pauseStartTime = 0;
+        let currentLapStartTime = 0;
+        let timerAnimationFrame = null;
+
+        // Lap Data History
+        let laps = []; // Array of { id, lapTime, totalTime }
+
+        // Audio & Haptic Feedback Settings
+        let soundEnabled = true;
+        let audioCtx = null;
+
+        // Screen Wake Lock Handler
+        let wakeLock = null;
+
+        // UI DOM Elements
+        const totalTimerEl = document.getElementById('totalTimer');
+        const lapTimerEl = document.getElementById('lapTimerDisplay');
+        const lapCounterLabelEl = document.getElementById('lapCounterLabel');
+        const historyListEl = document.getElementById('historyList');
+        const emptyHistoryMsgEl = document.getElementById('emptyHistoryMsg');
+        const lapCountBadgeEl = document.getElementById('lapCountBadge');
+
+        // State UI Containers
+        const stateStoppedEl = document.getElementById('stateStopped');
+        const stateRunningEl = document.getElementById('stateRunning');
+        const statePausedEl = document.getElementById('statePaused');
+
+        // Action Buttons
+        const startBtn = document.getElementById('startBtn');
+        const lapBtn = document.getElementById('lapBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // Settings Buttons & Indicators
+        const soundToggleBtn = document.getElementById('soundToggleBtn');
+        const soundOnIcon = document.getElementById('soundOnIcon');
+        const soundOffIcon = document.getElementById('soundOffIcon');
+        const wakeLockBadge = document.getElementById('wakeLockBadge');
+        const wakeLockDot = document.getElementById('wakeLockDot');
+        const wakeLockText = document.getElementById('wakeLockText');
+
+        // Zero-dependency Audio Synthesizer for instant haptic beep feedback
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioCtx = new AudioContext();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playFeedbackSound(freq = 880, type = 'sine', duration = 0.08) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                
+                // Attack and Decay curve
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {
+                console.warn('Audio playback error:', e);
+            }
+        }
+
+        // Tactile Haptic Vibration Feedback
+        function triggerHaptic(pattern = [30]) {
+            if (navigator.vibrate) {
+                try {
+                    navigator.vibrate(pattern);
+                } catch (e) {
+                    // Ignore vibration restrictions
+                }
+            }
+        }
+
+        // Screen Wake Lock logic to keep phone screen on during rest periods
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    updateWakeLockUI(true);
+                    
+                    wakeLock.addEventListener('release', () => {
+                        updateWakeLockUI(false);
+                    });
+                } catch (err) {
+                    console.log('Wake Lock request failed:', err);
+                    updateWakeLockUI(false);
+                }
+            } else {
+                updateWakeLockUI(false);
+            }
+        }
+
+        async function releaseWakeLock() {
+            if (wakeLock) {
+                try {
+                    await wakeLock.release();
+                    wakeLock = null;
+                } catch (e) {
+                    console.log('Wake lock release error:', e);
+                }
+            }
+            updateWakeLockUI(false);
+        }
+
+        function updateWakeLockUI(active) {
+            if (active) {
+                wakeLockBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-800/60";
+                wakeLockDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+                wakeLockText.textContent = "Screen On";
+            } else {
+                wakeLockBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-900 text-zinc-500 border border-zinc-800";
+                wakeLockDot.className = "w-2 h-2 rounded-full bg-zinc-600";
+                wakeLockText.textContent = "Lock Off";
+            }
+        }
+
+        // Auto re-acquire wake lock if user switches app tabs and returns
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible' && state === 'running') {
+                await requestWakeLock();
+            }
+        });
+
+        // Milliseconds to MM:SS.ms string formatter
+        function formatTime(ms) {
+            if (ms < 0) ms = 0;
+            const minutes = Math.floor(ms / 60000);
+            const seconds = Math.floor((ms % 60000) / 1000);
+            const tenths = Math.floor((ms % 1000) / 100);
+
+            const pad = (n) => n.toString().padStart(2, '0');
+            return `${pad(minutes)}:${pad(seconds)}.${tenths}`;
+        }
+
+        function updateTimerDisplays() {
+            if (state !== 'running') return;
+
+            const now = performance.now();
+            const totalElapsed = now - startTime - totalPausedTime;
+            const currentLapElapsed = now - currentLapStartTime;
+
+            // Render numbers
+            totalTimerEl.textContent = formatTime(totalElapsed);
+            lapTimerEl.textContent = formatTime(currentLapElapsed);
+
+            timerAnimationFrame = requestAnimationFrame(updateTimerDisplays);
+        }
+
+        function setState(newState) {
+            state = newState;
+
+            stateStoppedEl.classList.add('hidden');
+            stateRunningEl.classList.add('hidden');
+            statePausedEl.classList.add('hidden');
+
+            if (state === 'stopped') {
+                stateStoppedEl.classList.remove('hidden');
+                lapTimerEl.className = "font-mono-digits text-7xl sm:text-8xl font-black tracking-tight text-emerald-400 glow-emerald my-1 transition-all duration-300";
+            } else if (state === 'running') {
+                stateRunningEl.classList.remove('hidden');
+                lapTimerEl.className = "font-mono-digits text-7xl sm:text-8xl font-black tracking-tight text-emerald-400 glow-emerald my-1 transition-all duration-300";
+            } else if (state === 'paused') {
+                statePausedEl.classList.remove('hidden');
+                // Dim display slightly on pause
+                lapTimerEl.className = "font-mono-digits text-7xl sm:text-8xl font-black tracking-tight text-amber-400 glow-amber my-1 opacity-90 transition-all duration-300";
+            }
+        }
+
+        // Action: Start
+        function startWorkout() {
+            initAudio();
+            playFeedbackSound(1046.5, 'sine', 0.12); // High C tone
+            triggerHaptic([40]);
+
+            const now = performance.now();
+            startTime = now;
+            totalPausedTime = 0;
+            currentLapStartTime = now;
+            laps = [];
+
+            renderHistory();
+            setState('running');
+            requestWakeLock();
+
+            lapCounterLabelEl.textContent = `Set 1`;
+            timerAnimationFrame = requestAnimationFrame(updateTimerDisplays);
+        }
+
+        // Action: Lap / Next Set
+        function recordLap() {
+            if (state !== 'running') return;
+
+            const now = performance.now();
+            const totalElapsed = now - startTime - totalPausedTime;
+            const lapElapsed = now - currentLapStartTime;
+
+            // Audio & Haptic confirmation for set lap
+            playFeedbackSound(1318.5, 'sine', 0.1); // E6 High beep
+            triggerHaptic([30, 40, 30]);
+
+            // Save Lap Record
+            const lapNumber = laps.length + 1;
+            laps.unshift({
+                id: lapNumber,
+                lapTime: lapElapsed,
+                totalTime: totalElapsed
+            });
+
+            // Reset Current Lap Start Marker
+            currentLapStartTime = now;
+            lapCounterLabelEl.textContent = `Set ${lapNumber + 1}`;
+
+            // Render history update
+            renderHistory();
+        }
+
+        // Action: Pause
+        function pauseWorkout() {
+            if (state !== 'running') return;
+
+            pauseStartTime = performance.now();
+            cancelAnimationFrame(timerAnimationFrame);
+            
+            playFeedbackSound(659.25, 'sine', 0.15); // E5 Lower beep
+            triggerHaptic([50]);
+
+            setState('paused');
+            releaseWakeLock();
+        }
+
+        // Action: Resume
+        function resumeWorkout() {
+            if (state !== 'paused') return;
+
+            const now = performance.now();
+            totalPausedTime += (now - pauseStartTime);
+            currentLapStartTime += (now - pauseStartTime);
+
+            playFeedbackSound(880, 'sine', 0.1);
+            triggerHaptic([30]);
+
+            setState('running');
+            requestWakeLock();
+            timerAnimationFrame = requestAnimationFrame(updateTimerDisplays);
+        }
+
+        // Action: Reset (Only callable when paused!)
+        function resetWorkout() {
+            if (state !== 'paused') return;
+
+            cancelAnimationFrame(timerAnimationFrame);
+            
+            playFeedbackSound(440, 'triangle', 0.2); // Low A sound
+            triggerHaptic([80]);
+
+            state = 'stopped';
+            startTime = 0;
+            totalPausedTime = 0;
+            currentLapStartTime = 0;
+            laps = [];
+
+            totalTimerEl.textContent = "00:00.0";
+            lapTimerEl.textContent = "00:00.0";
+            lapCounterLabelEl.textContent = "Set 1";
+
+            renderHistory();
+            setState('stopped');
+            releaseWakeLock();
+        }
+
+        function renderHistory() {
+            lapCountBadgeEl.textContent = `${laps.length} ${laps.length === 1 ? 'Set' : 'Sets'}`;
+
+            if (laps.length === 0) {
+                emptyHistoryMsgEl.classList.remove('hidden');
+                historyListEl.innerHTML = '';
+                historyListEl.appendChild(emptyHistoryMsgEl);
+                return;
+            }
+
+            emptyHistoryMsgEl.classList.add('hidden');
+
+            // Determine fastest and slowest lap indices for visual highlight badges
+            let fastestLapId = null;
+            let slowestLapId = null;
+
+            if (laps.length > 1) {
+                let minTime = Infinity;
+                let maxTime = -1;
+
+                laps.forEach(l => {
+                    if (l.lapTime < minTime) { minTime = l.lapTime; fastestLapId = l.id; }
+                    if (l.lapTime > maxTime) { maxTime = l.lapTime; slowestLapId = l.id; }
+                });
+            }
+
+            // Generate HTML items
+            historyListEl.innerHTML = laps.map((lap) => {
+                let highlightClass = "border-zinc-900 bg-zinc-900/40 text-zinc-300";
+                let badgeHTML = "";
+
+                if (lap.id === fastestLapId) {
+                    highlightClass = "border-emerald-800/40 bg-emerald-950/20 text-emerald-300";
+                    badgeHTML = `<span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-900/60 text-emerald-400 border border-emerald-700/50">Fastest</span>`;
+                } else if (lap.id === slowestLapId) {
+                    highlightClass = "border-amber-800/40 bg-amber-950/20 text-amber-300";
+                    badgeHTML = `<span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-900/60 text-amber-400 border border-amber-700/50">Slowest</span>`;
+                }
+
+                return `
+                    <div class="flex items-center justify-between p-2.5 rounded-xl border ${highlightClass} transition-all">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-zinc-500 w-12">Set ${lap.id}</span>
+                            ${badgeHTML}
+                        </div>
+                        <div class="flex items-center gap-4 font-mono-digits">
+                            <span class="font-extrabold text-sm">${formatTime(lap.lapTime)}</span>
+                            <span class="text-zinc-500 text-[11px] w-14 text-right">${formatTime(lap.totalTime)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Attach Button Listeners
+        startBtn.addEventListener('click', startWorkout);
+        lapBtn.addEventListener('click', recordLap);
+        pauseBtn.addEventListener('click', pauseWorkout);
+        resumeBtn.addEventListener('click', resumeWorkout);
+        resetBtn.addEventListener('click', resetWorkout);
+
+        // Sound Toggle Handler
+        soundToggleBtn.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            if (soundEnabled) {
+                soundOnIcon.classList.remove('hidden');
+                soundOffIcon.classList.add('hidden');
+                playFeedbackSound(880, 'sine', 0.08);
+            } else {
+                soundOnIcon.classList.add('hidden');
+                soundOffIcon.classList.remove('hidden');
+            }
+        });
+
+        // Initialize display state
+        setState('stopped');
+        renderHistory();
+    </script>
+</body>
+</html>
