@@ -493,38 +493,12 @@
 
             emptyHistoryMsgEl.classList.add('hidden');
 
-            // Determine fastest and slowest lap indices for visual highlight badges
-            let fastestLapId = null;
-            let slowestLapId = null;
-
-            if (laps.length > 1) {
-                let minTime = Infinity;
-                let maxTime = -1;
-
-                laps.forEach(l => {
-                    if (l.lapTime < minTime) { minTime = l.lapTime; fastestLapId = l.id; }
-                    if (l.lapTime > maxTime) { maxTime = l.lapTime; slowestLapId = l.id; }
-                });
-            }
-
             // Generate HTML items
             historyListEl.innerHTML = laps.map((lap) => {
-                let highlightClass = "border-zinc-900 bg-zinc-900/40 text-zinc-300";
-                let badgeHTML = "";
-
-                if (lap.id === fastestLapId) {
-                    highlightClass = "border-emerald-800/40 bg-emerald-950/20 text-emerald-300";
-                    badgeHTML = `<span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-900/60 text-emerald-400 border border-emerald-700/50">Fastest</span>`;
-                } else if (lap.id === slowestLapId) {
-                    highlightClass = "border-amber-800/40 bg-amber-950/20 text-amber-300";
-                    badgeHTML = `<span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-900/60 text-amber-400 border border-amber-700/50">Slowest</span>`;
-                }
-
                 return `
-                    <div class="flex items-center justify-between p-2.5 rounded-xl border ${highlightClass} transition-all">
+                    <div class="flex items-center justify-between p-2.5 rounded-xl border border-zinc-900 bg-zinc-900/40 text-zinc-300 transition-all">
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-zinc-500 w-12">Set ${lap.id}</span>
-                            ${badgeHTML}
                         </div>
                         <div class="flex items-center gap-4 font-mono-digits">
                             <span class="font-extrabold text-sm">${formatTime(lap.lapTime)}</span>
